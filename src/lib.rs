@@ -1,3 +1,10 @@
+#[macro_use]
+extern crate lazy_static;
+
+mod validate;
+
+use self::validate::validate_number;
+
 use std::collections::HashMap;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -19,7 +26,7 @@ pub enum JsonError {
     InvalidValue,
 }
 
-type JsonResult<T> = Result<T, JsonError>;
+pub type JsonResult<T> = Result<T, JsonError>;
 
 pub fn parse(src: &str) -> JsonResult<JsonValue> {
     let mut ctx = JsonContext {
@@ -36,6 +43,7 @@ pub fn parse(src: &str) -> JsonResult<JsonValue> {
             'n' => ctx.parse_null(),
             't' => ctx.parse_true(),
             'f' => ctx.parse_false(),
+            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '-' => ctx.parse_number(),
             _ => Err(JsonError::InvalidValue),
         })
         .and_then(|v| {
@@ -97,5 +105,27 @@ impl<'a> JsonContext<'a> {
 
     fn parse_false(&mut self) -> JsonResult<JsonValue> {
         JsonContext::parse_literal("false")(self).map(|_| JsonValue::Boolean(false))
+    }
+
+    fn parse_number(&mut self) -> JsonResult<JsonValue> {
+        let mut s = String::new();
+        s.push(self.chars.next().unwrap());
+
+        while let Some(&ch) = self.chars.peek() {
+            if let '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '.' | 'e' | 'E'
+            | '-' | '+' = ch
+            {
+                s.push(ch);
+                self.chars.next();
+            } else {
+                break;
+            }
+        }
+
+        if validate_number(&s) {
+            Ok(JsonValue::Number(s.parse().unwrap()))
+        } else {
+            Err(JsonError::InvalidValue)
+        }
     }
 }
