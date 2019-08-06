@@ -81,17 +81,22 @@ impl<'a> JsonContext<'a> {
     #[inline(always)]
     fn parse_literal(s: &'static str) -> impl Fn(&mut JsonContext) -> JsonResult<()> {
         move |ctx| {
-            ctx.chars
-                .by_ref()
-                .take(s.len())
-                .zip(s.chars())
-                .try_for_each(|(a, b)| {
-                    if a != b {
-                        Err(JsonError::InvalidValue)
-                    } else {
-                        Ok(())
-                    }
-                })
+            let mut cnt = 0;
+            let iter = ctx.chars.by_ref().take(s.len()).zip(s.chars());
+
+            for (a, b) in iter {
+                if a != b {
+                    return Err(JsonError::InvalidValue);
+                } else {
+                    cnt += 1;
+                }
+            }
+
+            if cnt != s.len() {
+                Err(JsonError::InvalidValue)
+            } else {
+                Ok(())
+            }
         }
     }
 
