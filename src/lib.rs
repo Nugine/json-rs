@@ -4,6 +4,7 @@ extern crate lazy_static;
 mod types;
 mod validate;
 
+use self::types::{is_unescaped_char, is_whitespace};
 pub use self::types::{JsonError, JsonResult, JsonValue};
 use self::validate::validate_number;
 
@@ -248,20 +249,5 @@ impl<'a> JsonContext<'a> {
                 _ => return Err(JsonError::InvalidValue),
             }
         }
-    }
-}
-
-#[inline(always)]
-fn is_unescaped_char(ch: char) -> bool {
-    let n = ch as u32;
-    (0x20..=0x21).contains(&n) || (0x23..=0x5B).contains(&n) || (0x5D..=0x10_FFFF).contains(&n)
-}
-
-#[inline(always)]
-fn is_whitespace(ch: char) -> bool {
-    if let ' ' | '\t' | '\n' | '\r' = ch {
-        true
-    } else {
-        false
     }
 }

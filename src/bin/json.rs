@@ -11,6 +11,11 @@ fn main() {
         println!("{:?}", &s);
         let res = json_rs::parse(&s);
         println!("{:?}", res);
+
+        if let Ok(val) = res {
+            println!("{}", val.to_string());
+        }
+
         s.clear();
     }
 }
