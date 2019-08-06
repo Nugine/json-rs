@@ -33,7 +33,10 @@ macro_rules! expect_str {
 macro_rules! expect_array {
     ($src:expr,$slice:expr) => {{
         let val = json_rs::parse($src);
-        assert_eq!(val.unwrap().as_slice().unwrap(), $slice);
+        assert_eq!(
+            val.expect("failed").as_slice().expect("not an array"),
+            $slice
+        );
     }};
 }
 
@@ -134,9 +137,10 @@ fn test_parse_str() {
     expect_str!(r#""\u1234ab""#, "\u{1234}ab");
 }
 
-#[ignore]
 #[test]
 fn test_parse_array() {
+    use JsonValue::{Array, Number};
+
     expect_array!(
         r#"[ null , false , true , 123 , "abc" ]"#,
         &[
@@ -147,4 +151,18 @@ fn test_parse_array() {
             JsonValue::String("abc".to_owned())
         ]
     );
+
+    expect_array!(
+        r#"[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"#,
+        &[
+            Array(vec![]),
+            Array(vec![Number(0.)]),
+            Array(vec![Number(0.), Number(1.),]),
+            Array(vec![Number(0.), Number(1.), Number(2.),]),
+        ]
+    );
+
+    expect_err!("[", JsonError::InvalidValue);
+
+    expect_err!("[nulll]", JsonError::InvalidValue);
 }
