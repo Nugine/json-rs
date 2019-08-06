@@ -1,33 +1,14 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod types;
 mod validate;
 
+pub use self::types::{JsonError, JsonResult, JsonValue};
 use self::validate::validate_number;
 
-use std::collections::HashMap;
 use std::iter::Peekable;
 use std::str::Chars;
-
-#[derive(Debug, PartialEq)]
-pub enum JsonValue {
-    Null,
-    Boolean(bool),
-    Number(f64),
-    String(String),
-    Array(Vec<JsonValue>),
-    Object(HashMap<String, JsonValue>),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum JsonError {
-    ExpectValue,
-    RootNotSingular,
-    InvalidValue,
-    NumberTooBig,
-}
-
-pub type JsonResult<T> = Result<T, JsonError>;
 
 pub fn parse(src: &str) -> JsonResult<JsonValue> {
     let mut ctx = JsonContext {
