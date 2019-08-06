@@ -38,24 +38,24 @@ const S: State = 0;
 const T: State = 12;
 
 macro_rules! state_table {
-        {$($state:expr => [$($token:expr => $target:expr $(,)?)+]$(,)?)+} => {{
-            let mut __map = StateTable::new();
-            $(
-                __map.insert($state, {
-                    let mut __table = StateTableRow::new();
-                    $(
-                        __table.insert($token, $target as i8);
-                    )+
-                    __table
-                });
-            )+
+    {$($state:expr => [$($token:expr => $target:expr $(,)?)+]$(,)?)+} => {{
+        let mut __map = StateTable::new();
+        $(
+            __map.insert($state, {
+                let mut __table = StateTableRow::new();
+                $(
+                    __table.insert($token, $target as i8);
+                )+
+                __table
+            });
+        )+
 
-            __map
-        }};
-    }
+        __map
+    }};
+}
 
-lazy_static! {
-    static ref TABLE: StateTable = state_table! {
+fn init_table() -> StateTable {
+    state_table! {
         S => [MS=>1,NoCond=>2],
         1 => [NoCond => 2],
         2 => [D0=>3,D19=>4],
@@ -68,6 +68,20 @@ lazy_static! {
         9 => [MS=>10,PS=>10,D0=>11,D19=>11],
         10 => [NoCond=>11],
         11 => [D0=>11,D19=>11,EOF=>T]
+    }
+}
+
+lazy_static! {
+    static ref TABLE: [[State; 8]; 13] = {
+        let mut array = [[-1; 8]; 13];
+        let table = init_table();
+        for (&state, row) in table.iter() {
+            for (&token, &target) in row {
+                array[state as usize][token as usize] = target;
+            }
+        }
+
+        array
     };
 }
 
@@ -75,7 +89,7 @@ pub fn validate_number(s: &str) -> bool {
     let mut chars = s.chars().peekable();
 
     let mut state: State = S;
-    let mut row = TABLE.get(&state).unwrap();
+    let mut row = unsafe { TABLE.get_unchecked(state as usize) };
 
     loop {
         let tk = chars.peek().cloned().map(Token::from_char).unwrap_or(EOF);
@@ -84,21 +98,23 @@ pub fn validate_number(s: &str) -> bool {
             return false;
         }
 
-        if let Some(&target) = row.get(&tk) {
+        let &target = unsafe { row.get_unchecked(tk as usize) };
+        if target != -1 {
             chars.next();
             state = target;
         } else {
-            if let Some(&target) = row.get(&NoCond) {
+            let &target = unsafe { row.get_unchecked(NoCond as usize) };
+            if target != -1 {
                 state = target;
             } else {
                 return false;
             }
         }
-        
+
         if state == T {
             return chars.peek().is_none();
         } else {
-            row = TABLE.get(&state).unwrap();
+            row = unsafe { TABLE.get_unchecked(state as usize) };
         }
     }
 }
@@ -134,16 +150,4 @@ fn test_validate_number() {
     assert!(!validate_number("inf"));
     assert!(!validate_number("NAN"));
     assert!(!validate_number("nan"));
-}
-
-#[cfg(test)]
-#[test]
-fn test_print_table() {
-    let mut table: [[State; 8]; 13] = [[-1; 8]; 13];
-    for (&state, row) in TABLE.iter() {
-        for (&token, &target) in row {
-            table[state as usize][token as usize] = target;
-        }
-    }
-    println!("{:?}", table);
 }

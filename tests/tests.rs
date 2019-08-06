@@ -78,4 +78,19 @@ fn test_parse_num() {
     expect_err!("inf", JsonError::InvalidValue);
     expect_err!("NAN", JsonError::InvalidValue);
     expect_err!("nan", JsonError::InvalidValue);
+
+    /* the smallest number > 1 */
+    expect_num!("1.0000000000000002", 1.0000000000000002);
+    /* minimum denormal */
+    expect_num!("4.9406564584124654e-324", 4.9406564584124654e-324);
+    expect_num!("-4.9406564584124654e-324", -4.9406564584124654e-324);
+    /* Max subnormal double */
+    expect_num!("2.2250738585072009e-308", 2.2250738585072009e-308);
+    expect_num!("-2.2250738585072009e-308", -2.2250738585072009e-308);
+    /* Min normal positive double */
+    expect_num!("2.2250738585072014e-308", 2.2250738585072014e-308);
+    expect_num!("-2.2250738585072014e-308", -2.2250738585072014e-308);
+    /* Max double */
+    expect_num!("1.7976931348623157e+308", 1.7976931348623157e+308);
+    expect_num!("-1.7976931348623157e+308", -1.7976931348623157e+308);
 }
