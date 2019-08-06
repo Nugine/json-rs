@@ -24,6 +24,7 @@ pub enum JsonError {
     ExpectValue,
     RootNotSingular,
     InvalidValue,
+    NumberTooBig,
 }
 
 pub type JsonResult<T> = Result<T, JsonError>;
@@ -128,7 +129,12 @@ impl<'a> JsonContext<'a> {
         }
 
         if validate_number(&s) {
-            Ok(JsonValue::Number(s.parse().unwrap()))
+            let num: f64 = s.parse().expect("illegal float number");
+            if !num.is_infinite() {
+                Ok(JsonValue::Number(num))
+            } else {
+                Err(JsonError::NumberTooBig)
+            }
         } else {
             Err(JsonError::InvalidValue)
         }

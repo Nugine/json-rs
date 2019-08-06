@@ -78,6 +78,9 @@ fn test_parse_num() {
     expect_err!("inf", JsonError::InvalidValue);
     expect_err!("NAN", JsonError::InvalidValue);
     expect_err!("nan", JsonError::InvalidValue);
+    expect_err!("0123", JsonError::InvalidValue);
+    expect_err!("0m", JsonError::InvalidValue);
+    expect_err!("123.", JsonError::InvalidValue);
 
     /* the smallest number > 1 */
     expect_num!("1.0000000000000002", 1.0000000000000002);
@@ -93,4 +96,7 @@ fn test_parse_num() {
     /* Max double */
     expect_num!("1.7976931348623157e+308", 1.7976931348623157e+308);
     expect_num!("-1.7976931348623157e+308", -1.7976931348623157e+308);
+
+    expect_err!("1e+400", JsonError::NumberTooBig);
+    expect_err!("-1e+400", JsonError::NumberTooBig);
 }
