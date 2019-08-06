@@ -32,26 +32,30 @@ macro_rules! expect_str {
 
 macro_rules! expect_array {
     ($src:expr,$slice:expr) => {{
-        let val = json_rs::parse($src);
-        assert_eq!(
-            val.expect("failed").as_slice().expect("not an array"),
-            $slice
-        );
+        let val = json_rs::parse($src).expect("failed");
+        assert_eq!(val.as_slice().expect("not an array"), $slice);
+    }};
+}
+
+macro_rules! expect_val {
+    ($src:expr, [$($path:expr$(,)?)+], $val:expr) => {{
+        let val = json_rs::parse($src).expect("failed");
+        assert_eq!(val$([$path])+, $val);
     }};
 }
 
 #[test]
 fn test_parse() {
     expect_err!(" l ", JsonError::InvalidValue);
-    expect_err!(" ", JsonError::ExpectValue);
-    expect_err!("", JsonError::ExpectValue);
+    expect_err!(" ", JsonError::UnexpectedEnd);
+    expect_err!("", JsonError::UnexpectedEnd);
 }
 
 #[test]
 fn test_parse_null() {
     expect_ok!("null", JsonValue::Null);
     expect_ok!(" null ", JsonValue::Null);
-    expect_err!("nul", JsonError::InvalidValue);
+    expect_err!("nul", JsonError::UnexpectedEnd);
     expect_err!(" nulll", JsonError::InvalidValue);
     expect_err!(" null n", JsonError::RootNotSingular);
 }
@@ -125,8 +129,8 @@ fn test_parse_num() {
 
 #[test]
 fn test_parse_str() {
-    expect_err!(r#"""#, JsonError::InvalidValue);
-    expect_err!(r#""\""#, JsonError::InvalidValue);
+    expect_err!(r#"""#, JsonError::UnexpectedEnd);
+    expect_err!(r#""\""#, JsonError::UnexpectedEnd);
     expect_err!("\"\u{22}\"", JsonError::InvalidValue);
     expect_err!(r#""\u""#, JsonError::InvalidValue);
     expect_err!("   \"\"  \"\" ", JsonError::RootNotSingular);
@@ -168,7 +172,30 @@ fn test_parse_array() {
 
     expect_err!("[null     ,     [null,]]\n", JsonError::InvalidValue);
 
-    expect_err!("[", JsonError::InvalidValue);
+    expect_err!("[", JsonError::UnexpectedEnd);
 
     expect_err!("[nulll]", JsonError::InvalidValue);
+}
+
+#[test]
+fn test_parse_object() {
+    expect_err!("{:1,", JsonError::InvalidValue);
+    expect_err!("{1:1,", JsonError::InvalidValue);
+    expect_err!("{true:1,", JsonError::InvalidValue);
+    expect_err!("{false:1,", JsonError::InvalidValue);
+    expect_err!("{null:1,", JsonError::InvalidValue);
+    expect_err!("{[]:1,", JsonError::InvalidValue);
+    expect_err!("{{}:1,", JsonError::InvalidValue);
+    expect_err!(r#"{"a":1]"#, JsonError::InvalidValue);
+    expect_err!(r#"{"a":1 "b""#, JsonError::InvalidValue);
+
+    expect_err!(r#"{"a"}"#, JsonError::MissingColon);
+    expect_err!(r#"{"a","b"}"#, JsonError::MissingColon);
+
+    expect_err!(r#"{"a":1,"#, JsonError::UnexpectedEnd);
+    expect_err!(r#"{"a":{}"#, JsonError::UnexpectedEnd);
+    expect_err!(r#"{"a":1"#, JsonError::UnexpectedEnd);
+
+    expect_val!(r#"{"a":null,"b":null}"#, ["a"], JsonValue::Null);
+    expect_val!(r#"{"a":{"b":null}}"#, ["a", "b"], JsonValue::Null);
 }

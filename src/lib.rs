@@ -7,6 +7,7 @@ mod validate;
 pub use self::types::{JsonError, JsonResult, JsonValue};
 use self::validate::validate_number;
 
+use std::collections::HashMap;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -48,7 +49,7 @@ impl<'a> JsonContext<'a> {
 
     fn parse_value(&mut self) -> JsonResult<JsonValue> {
         self.parse_whitespace();
-        let ch = self.peek().ok_or(JsonError::ExpectValue)?;
+        let ch = self.peek().ok_or(JsonError::UnexpectedEnd)?;
 
         let val = match ch {
             'n' => self.parse_null(),
@@ -56,6 +57,7 @@ impl<'a> JsonContext<'a> {
             'f' => self.parse_false(),
             '"' => self.parse_string(),
             '[' => self.parse_array(),
+            '{' => self.parse_object(),
             c if c == '-' || c.is_digit(10) => self.parse_number(),
             _ => Err(JsonError::InvalidValue),
         }?;
@@ -86,13 +88,9 @@ impl<'a> JsonContext<'a> {
     fn parse_literal(s: &'static str) -> impl Fn(&mut JsonContext) -> JsonResult<()> {
         move |ctx| {
             for b in s.chars() {
-                match ctx.consume() {
-                    None => return Err(JsonError::InvalidValue),
-                    Some(a) => {
-                        if a != b {
-                            return Err(JsonError::InvalidValue);
-                        }
-                    }
+                let a = ctx.consume().ok_or(JsonError::UnexpectedEnd)?;
+                if a != b {
+                    return Err(JsonError::InvalidValue);
                 }
             }
             Ok(())
@@ -137,22 +135,19 @@ impl<'a> JsonContext<'a> {
     }
 
     fn parse_hex4(&mut self) -> JsonResult<char> {
-        let mut i = 4;
         let mut ans: u16 = 0;
-        for ch in self.chars.by_ref().take(4) {
+
+        for _ in 0..4 {
+            let ch = self.consume().ok_or(JsonError::UnexpectedEnd)?;
             let t = ch.to_digit(16).ok_or(JsonError::InvalidValue)? as u16;
             ans = (ans << 4) | t;
-            i -= 1;
         }
-        if i == 0 {
-            Ok(unsafe { std::char::from_u32_unchecked(ans as u32) })
-        } else {
-            Err(JsonError::InvalidValue)
-        }
+
+        Ok(unsafe { std::char::from_u32_unchecked(u32::from(ans)) })
     }
 
     fn parse_escape_char(&mut self) -> JsonResult<char> {
-        let ch = self.consume().ok_or(JsonError::InvalidValue)?;
+        let ch = self.consume().ok_or(JsonError::UnexpectedEnd)?;
         match ch {
             '"' => Ok('"'),
             '\\' => Ok('\\'),
@@ -167,53 +162,99 @@ impl<'a> JsonContext<'a> {
         }
     }
 
-    fn parse_string(&mut self) -> JsonResult<JsonValue> {
-        self.consume();
+    fn parse_string_raw(&mut self) -> JsonResult<String> {
+        if '"' != self.consume().ok_or(JsonError::UnexpectedEnd)? {
+            return Err(JsonError::InvalidValue);
+        }
+
         let mut s = String::new();
 
-        while let Some(ch) = self.consume() {
-            match ch {
-                '"' => return Ok(JsonValue::String(s)),
+        loop {
+            match self.consume().ok_or(JsonError::UnexpectedEnd)? {
+                '"' => return Ok(s),
                 '\\' => s.push(self.parse_escape_char()?),
                 c if is_unescaped_char(c) => s.push(c),
                 _ => return Err(JsonError::InvalidValue),
             }
         }
+    }
 
-        Err(JsonError::InvalidValue)
+    fn parse_string(&mut self) -> JsonResult<JsonValue> {
+        self.parse_string_raw().map(JsonValue::String)
     }
 
     fn parse_array(&mut self) -> JsonResult<JsonValue> {
         self.consume();
-        let mut arr = <Vec<JsonValue>>::new();
         self.parse_whitespace();
-        match self.peek() {
-            None => return Err(JsonError::InvalidValue),
-            Some(']') => {
+
+        let mut arr = <Vec<JsonValue>>::new();
+        match self.peek().ok_or(JsonError::UnexpectedEnd)? {
+            ']' => {
                 self.consume();
                 return Ok(JsonValue::Array(arr));
             }
-            Some(_) => {
+            _ => {
                 arr.push(self.parse_value()?);
             }
         };
 
-        while let Some(ch) = self.consume() {
-            match ch {
+        loop {
+            match self.consume().ok_or(JsonError::UnexpectedEnd)? {
                 ',' => arr.push(self.parse_value()?),
                 ']' => return Ok(JsonValue::Array(arr)),
                 _ => return Err(JsonError::InvalidValue),
             }
         }
+    }
 
-        Err(JsonError::InvalidValue)
+    fn parse_kv(&mut self) -> JsonResult<(String, JsonValue)> {
+        let k = self.parse_string_raw()?;
+        self.parse_whitespace();
+        match self.consume().ok_or(JsonError::UnexpectedEnd)? {
+            ':' => {
+                let v = self.parse_value()?;
+                Ok((k, v))
+            }
+            _ => Err(JsonError::MissingColon),
+        }
+    }
+
+    fn parse_object(&mut self) -> JsonResult<JsonValue> {
+        self.consume();
+        self.parse_whitespace();
+
+        let mut map = <HashMap<String, JsonValue>>::new();
+
+        match self.peek().ok_or(JsonError::UnexpectedEnd)? {
+            '}' => {
+                self.consume();
+                return Ok(JsonValue::Object(map));
+            }
+            _ => {
+                let (k, v) = self.parse_kv()?;
+                map.insert(k, v);
+            }
+        };
+
+        loop {
+            match self.consume().ok_or(JsonError::UnexpectedEnd)? {
+                ',' => {
+                    let (k, v) = self.parse_kv()?;
+                    map.insert(k, v);
+                }
+                '}' => {
+                    return Ok(JsonValue::Object(map));
+                }
+                _ => return Err(JsonError::InvalidValue),
+            }
+        }
     }
 }
 
 #[inline(always)]
 fn is_unescaped_char(ch: char) -> bool {
     let n = ch as u32;
-    (0x20..=0x21).contains(&n) || (0x23..=0x5B).contains(&n) || (0x5D..=0x10FFFF).contains(&n)
+    (0x20..=0x21).contains(&n) || (0x23..=0x5B).contains(&n) || (0x5D..=0x10_FFFF).contains(&n)
 }
 
 #[inline(always)]

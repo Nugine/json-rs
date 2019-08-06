@@ -13,10 +13,11 @@ pub enum JsonValue {
 
 #[derive(Debug, PartialEq)]
 pub enum JsonError {
-    ExpectValue,
     RootNotSingular,
     InvalidValue,
     NumberTooBig,
+    MissingColon,
+    UnexpectedEnd,
 }
 
 pub type JsonResult<T> = Result<T, JsonError>;
@@ -39,6 +40,17 @@ impl Index<usize> for JsonValue {
             &v[index]
         } else {
             panic!("json value is not an array")
+        }
+    }
+}
+
+impl Index<&str> for JsonValue {
+    type Output = JsonValue;
+    fn index<'a>(&self, index: &'a str) -> &JsonValue {
+        if let JsonValue::Object(ref map) = self {
+            &map[index]
+        } else {
+            panic!("json value is not an object")
         }
     }
 }
