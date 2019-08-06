@@ -44,7 +44,8 @@ pub fn parse(src: &str) -> JsonResult<JsonValue> {
             'n' => ctx.parse_null(),
             't' => ctx.parse_true(),
             'f' => ctx.parse_false(),
-            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '-' => ctx.parse_number(),
+            c if c == '-' || c.is_digit(10) => ctx.parse_number(),
+            '"' => ctx.parse_string(),
             _ => Err(JsonError::InvalidValue),
         })
         .and_then(|v| {
@@ -118,9 +119,7 @@ impl<'a> JsonContext<'a> {
         s.push(self.chars.next().unwrap());
 
         while let Some(&ch) = self.chars.peek() {
-            if let '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '.' | 'e' | 'E'
-            | '-' | '+' = ch
-            {
+            if ch.is_digit(10) || ".eE-+".contains(ch) {
                 s.push(ch);
                 self.chars.next();
             } else {
@@ -139,4 +138,57 @@ impl<'a> JsonContext<'a> {
             Err(JsonError::InvalidValue)
         }
     }
+
+    fn parse_hex4(&mut self) -> JsonResult<char> {
+        let mut i = 4;
+        let mut ans: u16 = 0;
+        for ch in self.chars.by_ref().take(4) {
+            let t = ch.to_digit(16).ok_or(JsonError::InvalidValue)? as u16;
+            ans = (ans << 4) | t;
+            i -= 1;
+        }
+        if i == 0 {
+            Ok(unsafe { std::char::from_u32_unchecked(ans as u32) })
+        } else {
+            Err(JsonError::InvalidValue)
+        }
+    }
+
+    fn parse_escape_char(&mut self) -> JsonResult<char> {
+        let ch = self.chars.next().ok_or(JsonError::InvalidValue)?;
+        match ch {
+            '"' => Ok('"'),
+            '\\' => Ok('\\'),
+            '/' => Ok('/'),
+            'b' => Ok('\u{8}'),
+            'f' => Ok('\u{c}'),
+            'n' => Ok('\n'),
+            'r' => Ok('\r'),
+            't' => Ok('\t'),
+            'u' => self.parse_hex4(),
+            _ => Err(JsonError::InvalidValue),
+        }
+    }
+
+    fn parse_string(&mut self) -> JsonResult<JsonValue> {
+        self.chars.next();
+        let mut s = String::new();
+
+        while let Some(ch) = self.chars.next() {
+            match ch {
+                '"' => return Ok(JsonValue::String(s)),
+                '\\' => s.push(self.parse_escape_char()?),
+                c if is_unescaped_char(c) => s.push(c),
+                _ => return Err(JsonError::InvalidValue),
+            }
+        }
+
+        Err(JsonError::InvalidValue)
+    }
+}
+
+#[inline(always)]
+fn is_unescaped_char(ch: char) -> bool {
+    let n = ch as u32;
+    (0x20..=0x21).contains(&n) || (0x23..=0x5B).contains(&n) || (0x5D..=0x10FFFF).contains(&n)
 }

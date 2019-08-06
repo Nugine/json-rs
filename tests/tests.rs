@@ -6,9 +6,9 @@ macro_rules! expect {
     };
 }
 
-macro_rules! expect_num {
-    ($src:expr,$num:expr) => {
-        expect!($src, Ok(JsonValue::Number($num)));
+macro_rules! expect_ok {
+    ($src:expr,$val:expr) => {
+        expect!($src, Ok($val));
     };
 }
 
@@ -18,31 +18,43 @@ macro_rules! expect_err {
     };
 }
 
+macro_rules! expect_num {
+    ($src:expr,$num:expr) => {
+        expect_ok!($src, JsonValue::Number($num));
+    };
+}
+
+macro_rules! expect_str {
+    ($src:expr,$str:expr) => {
+        expect_ok!($src, JsonValue::String($str.to_owned()));
+    };
+}
+
 #[test]
 fn test_parse() {
-    expect!(" l ", Err(JsonError::InvalidValue));
-    expect!(" ", Err(JsonError::ExpectValue));
-    expect!("", Err(JsonError::ExpectValue));
+    expect_err!(" l ", JsonError::InvalidValue);
+    expect_err!(" ", JsonError::ExpectValue);
+    expect_err!("", JsonError::ExpectValue);
 }
 
 #[test]
 fn test_parse_null() {
-    expect!("null", Ok(JsonValue::Null));
-    expect!(" null ", Ok(JsonValue::Null));
+    expect_ok!("null", JsonValue::Null);
+    expect_ok!(" null ", JsonValue::Null);
     expect_err!("nul", JsonError::InvalidValue);
-    expect!(" nulll", Err(JsonError::InvalidValue));
-    expect!(" null n", Err(JsonError::RootNotSingular));
+    expect_err!(" nulll", JsonError::InvalidValue);
+    expect_err!(" null n", JsonError::RootNotSingular);
 }
 
 #[test]
 fn test_parse_bool() {
-    expect!("true", Ok(JsonValue::Boolean(true)));
-    expect!(" true ", Ok(JsonValue::Boolean(true)));
-    expect!(" true t", Err(JsonError::RootNotSingular));
+    expect_ok!("true", JsonValue::Boolean(true));
+    expect_ok!(" true ", JsonValue::Boolean(true));
+    expect_err!(" true t", JsonError::RootNotSingular);
 
-    expect!("false", Ok(JsonValue::Boolean(false)));
-    expect!(" false ", Ok(JsonValue::Boolean(false)));
-    expect!(" false t", Err(JsonError::RootNotSingular));
+    expect_ok!("false", JsonValue::Boolean(false));
+    expect_ok!(" false ", JsonValue::Boolean(false));
+    expect_err!(" false t", JsonError::RootNotSingular);
 }
 
 #[test]
@@ -99,4 +111,18 @@ fn test_parse_num() {
 
     expect_err!("1e+400", JsonError::NumberTooBig);
     expect_err!("-1e+400", JsonError::NumberTooBig);
+}
+
+#[test]
+fn test_parse_str() {
+    expect_err!(r#"""#, JsonError::InvalidValue);
+    expect_err!(r#""\""#, JsonError::InvalidValue);
+    expect_err!("\"\u{22}\"", JsonError::InvalidValue);
+    expect_err!(r#""\u""#, JsonError::InvalidValue);
+    expect_err!("   \"\"  \"\" ", JsonError::RootNotSingular);
+
+    expect_str!(r#""\\""#, r#"\"#);
+    expect_str!(r#""\t""#, "\t");
+    expect_str!(r#""\n""#, "\n");
+    expect_str!(r#""\u1234ab""#, "\u{1234}ab");
 }
