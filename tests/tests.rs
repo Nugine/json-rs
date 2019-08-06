@@ -139,7 +139,7 @@ fn test_parse_str() {
 
 #[test]
 fn test_parse_array() {
-    use JsonValue::{Array, Number};
+    use JsonValue::{Array, Null, Number};
 
     expect_array!(
         r#"[ null , false , true , 123 , "abc" ]"#,
@@ -161,6 +161,12 @@ fn test_parse_array() {
             Array(vec![Number(0.), Number(1.), Number(2.),]),
         ]
     );
+
+    expect_array!("[null,[null]]\n", &[Null, Array(vec![Null])]);
+    expect_array!("[null   ,   [null]]\n", &[Null, Array(vec![Null])]);
+    expect_array!("[null\t,\t[null]]\n", &[Null, Array(vec![Null])]);
+
+    expect_err!("[null     ,     [null,]]\n", JsonError::InvalidValue);
 
     expect_err!("[", JsonError::InvalidValue);
 

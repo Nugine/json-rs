@@ -36,8 +36,14 @@ impl<'a> JsonContext<'a> {
         self.chars.peek().cloned()
     }
 
+    #[cfg(not(test))]
     fn consume(&mut self) -> Option<char> {
         self.chars.next()
+    }
+
+    #[cfg(test)]
+    fn consume(&mut self) -> Option<char> {
+        self.chars.next().map(|ch| dbg!(ch))
     }
 
     fn parse_value(&mut self) -> JsonResult<JsonValue> {
@@ -55,6 +61,8 @@ impl<'a> JsonContext<'a> {
         }?;
 
         if let Some(ch) = self.peek() {
+            #[cfg(test)]
+            dbg!(ch);
             if !",]}".contains(ch) && !is_whitespace(ch) {
                 return Err(JsonError::InvalidValue);
             }
@@ -77,22 +85,17 @@ impl<'a> JsonContext<'a> {
     #[inline(always)]
     fn parse_literal(s: &'static str) -> impl Fn(&mut JsonContext) -> JsonResult<()> {
         move |ctx| {
-            let mut cnt = 0;
-            let iter = ctx.chars.by_ref().take(s.len()).zip(s.chars());
-
-            for (a, b) in iter {
-                if a != b {
-                    return Err(JsonError::InvalidValue);
-                } else {
-                    cnt += 1;
+            for b in s.chars() {
+                match ctx.consume() {
+                    None => return Err(JsonError::InvalidValue),
+                    Some(a) => {
+                        if a != b {
+                            return Err(JsonError::InvalidValue);
+                        }
+                    }
                 }
             }
-
-            if cnt != s.len() {
-                Err(JsonError::InvalidValue)
-            } else {
-                Ok(())
-            }
+            Ok(())
         }
     }
 
