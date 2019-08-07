@@ -1,21 +1,16 @@
-use std::io::BufRead;
+use std::io::Read;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let mut s = String::new();
+    std::io::stdin().lock().read_to_string(&mut s)?;
 
-    loop {
-        let size = std::io::stdin().lock().read_line(&mut s).unwrap();
-        if size == 0 {
-            break;
+    match json_rs::parse(&s) {
+        Ok(val) => {
+            println!("{:?}", val);
         }
-        println!("{:?}", &s);
-        let res = json_rs::parse(&s);
-        println!("{:?}", res);
-
-        if let Ok(val) = res {
-            println!("{}", val.to_string());
+        Err(err) => {
+            eprintln!("{:?}", err);
         }
-
-        s.clear();
-    }
+    };
+    Ok(())
 }

@@ -20,12 +20,12 @@ impl<'a> JsonContext<'a> {
         self.chars.peek().cloned()
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(debug_assertions))]
     fn consume(&mut self) -> Option<char> {
         self.chars.next()
     }
 
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     fn consume(&mut self) -> Option<char> {
         self.chars.next().map(|ch| dbg!(ch))
     }
@@ -46,8 +46,6 @@ impl<'a> JsonContext<'a> {
         }?;
 
         if let Some(ch) = self.peek() {
-            #[cfg(test)]
-            dbg!(ch);
             if !",]}".contains(ch) && !is_whitespace(ch) {
                 return Err(JsonError::InvalidValue);
             }
@@ -191,6 +189,7 @@ impl<'a> JsonContext<'a> {
     }
 
     fn parse_kv(&mut self) -> JsonResult<(String, JsonValue)> {
+        self.parse_whitespace();
         let k = self.parse_string_raw()?;
         self.parse_whitespace();
         match self.consume().ok_or(JsonError::UnexpectedEnd)? {
