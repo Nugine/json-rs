@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Index;
+use std::ops::IndexMut;
 use std::string::ToString;
 
 #[derive(Debug, PartialEq)]
@@ -12,7 +13,7 @@ pub enum JsonValue {
     Object(HashMap<String, JsonValue>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum JsonError {
     RootNotSingular,
     InvalidValue,
@@ -110,9 +111,25 @@ pub fn is_whitespace(ch: char) -> bool {
 }
 
 impl JsonValue {
+    pub fn as_num(&self) -> Option<&f64> {
+        if let JsonValue::Number(ref n) = self {
+            Some(n)
+        } else {
+            None
+        }
+    }
+
     pub fn as_slice(&self) -> Option<&[JsonValue]> {
-        if let JsonValue::Array(ref v) = self {
-            Some(v.as_slice())
+        if let JsonValue::Array(ref arr) = self {
+            Some(arr.as_slice())
+        } else {
+            None
+        }
+    }
+
+    pub fn as_map(&self) -> Option<&HashMap<String, JsonValue>> {
+        if let JsonValue::Object(ref map) = self {
+            Some(map)
         } else {
             None
         }
@@ -129,8 +146,18 @@ impl Index<usize> for JsonValue {
     type Output = JsonValue;
 
     fn index(&self, index: usize) -> &JsonValue {
-        if let JsonValue::Array(ref v) = self {
-            &v[index]
+        if let JsonValue::Array(ref arr) = self {
+            &arr[index]
+        } else {
+            panic!("json value is not an array")
+        }
+    }
+}
+
+impl IndexMut<usize> for JsonValue {
+    fn index_mut(&mut self, index: usize) -> &mut JsonValue {
+        if let JsonValue::Array(ref mut arr) = self {
+            &mut arr[index]
         } else {
             panic!("json value is not an array")
         }
@@ -142,6 +169,16 @@ impl Index<&str> for JsonValue {
     fn index<'a>(&self, index: &'a str) -> &JsonValue {
         if let JsonValue::Object(ref map) = self {
             &map[index]
+        } else {
+            panic!("json value is not an object")
+        }
+    }
+}
+
+impl IndexMut<&str> for JsonValue {
+    fn index_mut<'a>(&mut self, index: &'a str) -> &mut JsonValue {
+        if let JsonValue::Object(ref mut map) = self {
+            map.get_mut(index).expect("key not found")
         } else {
             panic!("json value is not an object")
         }
