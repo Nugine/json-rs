@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(i8)]
 enum Token {
     MS,
@@ -10,111 +8,89 @@ enum Token {
     Pt,
     Exp,
     EOF,
-    NoCond,
-    Invalid,
 }
 
 impl Token {
-    fn from_char(ch: char) -> Self {
-        match ch {
+    #[inline(always)]
+    fn from_char(ch: char) -> Result<Self, ()> {
+        Ok(match ch {
             '-' => MS,
             '+' => PS,
             '0' => D0,
             '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => D19,
             '.' => Pt,
             'e' | 'E' => Exp,
-            _ => Invalid,
-        }
+            _ => return Err(()),
+        })
     }
 }
 
 use Token::*;
 
 type State = i8;
-type StateTableRow = HashMap<Token, State>;
-type StateTable = HashMap<State, StateTableRow>;
+type StateTable = [[State; 7]; 10];
 
-const S: State = 0;
-const T: State = 12;
+const START: State = 0;
+const END: State = 11;
 
 macro_rules! state_table {
     {$($state:expr => [$($token:expr => $target:expr $(,)?)+]$(,)?)+} => {{
-        let mut __map = StateTable::new();
+        let mut __table : StateTable = [[-1;7];10];
         $(
-            __map.insert($state, {
-                let mut __table = StateTableRow::new();
-                $(
-                    __table.insert($token, $target as i8);
-                )+
-                __table
-            });
+            let __row = &mut __table[$state as usize];
+            $(
+                __row[$token as usize] = $target;
+            )+
         )+
 
-        __map
+        __table
     }};
 }
 
 fn init_table() -> StateTable {
     state_table! {
-        S => [MS=>1,NoCond=>2],
-        1 => [NoCond => 2],
-        2 => [D0=>3,D19=>4],
-        3 => [NoCond=>5],
-        4 => [D0=>4,D19=>4,NoCond=>5],
-        5 => [EOF=>T,Pt=>6,NoCond=>8],
-        6 => [D0=>7,D19=>7],
-        7 => [D0=>7,D19=>7,NoCond=>8],
-        8 => [EOF=>T,Exp=>9],
-        9 => [MS=>10,PS=>10,D0=>11,D19=>11],
-        10 => [NoCond=>11],
-        11 => [D0=>11,D19=>11,EOF=>T]
+        START => [MS => 1, D0 => 2, D19 => 3],
+        1 => [D0 => 2, D19 => 3],
+        2 => [Pt => 5, Exp => 7, EOF => END],
+        3 => [D0 => 4, D19 => 4, Pt => 5, Exp => 7, EOF => END],
+        4 => [D0 => 4, D19 => 4, Pt => 5, Exp => 7, EOF => END],
+        5 => [D0 => 6, D19 => 6],
+        6 => [D0 => 6, D19 => 6, Exp => 7, EOF => END],
+        7 => [D0 => 9, D19 => 9, MS => 8, PS => 8],
+        8 => [D0 => 9, D19 => 9],
+        9 => [D0 => 9, D19 => 9, EOF => END],
     }
 }
 
 lazy_static! {
-    static ref TABLE: [[State; 8]; 13] = {
-        let mut array = [[-1; 8]; 13];
-        let table = init_table();
-        for (&state, row) in table.iter() {
-            for (&token, &target) in row {
-                array[state as usize][token as usize] = target;
-            }
-        }
-
-        array
-    };
+    static ref TABLE: StateTable = init_table();
 }
 
 pub fn validate_number(s: &str) -> bool {
     let mut chars = s.chars().peekable();
-
-    let mut state: State = S;
-    let mut row = unsafe { TABLE.get_unchecked(state as usize) };
+    let mut state: State = START;
 
     loop {
-        let tk = chars.peek().cloned().map(Token::from_char).unwrap_or(EOF);
+        let row = unsafe { TABLE.get_unchecked(state as usize) };
 
-        if tk == Invalid {
-            return false;
-        }
+        let tk = match chars.peek() {
+            None => Token::EOF,
+            Some(&ch) => match Token::from_char(ch) {
+                Err(_) => return false,
+                Ok(tk) => tk,
+            },
+        };
 
         let &target = unsafe { row.get_unchecked(tk as usize) };
         if target != -1 {
             chars.next();
             state = target;
         } else {
-            let &target = unsafe { row.get_unchecked(NoCond as usize) };
-            if target != -1 {
-                state = target;
-            } else {
-                return false;
-            }
+            return false;
         }
 
-        if state == T {
+        if state == END {
             return chars.peek().is_none();
-        } else {
-            row = unsafe { TABLE.get_unchecked(state as usize) };
         }
     }
 }
